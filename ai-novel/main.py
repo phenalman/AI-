@@ -1,4 +1,5 @@
-from novel import generate_setting, generate_outline, generate_chapter
+from novel import generate_setting, generate_outline
+from storage import save_text
 
 
 def main():
@@ -8,26 +9,26 @@ def main():
 
     setting = generate_setting(idea)
 
+    save_text(
+        "setting.md",
+        setting
+    )
+
     print("===== 小说设定 =====")
     print(setting)
+
 
     print("\n正在生成前10章大纲，请稍候...\n")
 
     outline = generate_outline(setting)
 
-    print("===== 前10章大纲 =====")
-    print(outline)
-
-    print("\n正在生成第1章，请稍候...\n")
-
-    chapter = generate_chapter(
-        setting,
-        outline,
-        1,
+    save_text(
+        "outline.md",
+        outline
     )
 
-    print("===== 第1章 =====")
-    print(chapter)
+    print("===== 前10章大纲 =====")
+    print(outline)
 
 
 if __name__ == "__main__":

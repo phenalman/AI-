@@ -1,3 +1,4 @@
+
 from llm import ask_ai
 
 from prompts import (
@@ -35,6 +36,7 @@ def generate_chapter(
     setting: str,
     outline: str,
     chapter_number: int,
+    previous_chapter: str = "",
 ) -> str:
     prompt = f"""
 {CHAPTER_PROMPT}
@@ -47,7 +49,22 @@ def generate_chapter(
 
 {outline}
 
+上一章正文：
+
+{previous_chapter}
+
 现在请创作第 {chapter_number} 章。
+
+要求：
+
+- 如果这是第一章，没有上一章正文，请直接开始创作。
+- 如果存在上一章正文，请自然承接上一章的剧情。
+- 保持人物性格、世界观和故事设定一致。
+- 不要重复上一章已经发生的剧情。
+- 当前章节必须推动故事继续发展。
+- 直接输出小说正文，不要解释写作过程。
 """
 
     return ask_ai(prompt)
+
+

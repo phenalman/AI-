@@ -91,18 +91,67 @@ def load_previous_summaries(novel_name, completed_chapter):
     return "\n\n".join(summaries)
 
 
+
+def chinese_number_to_int(text):
+    """把中文数字章节号转换成整数。"""
+
+    chinese_numbers = {
+        "零": 0,
+        "一": 1,
+        "二": 2,
+        "三": 3,
+        "四": 4,
+        "五": 5,
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+        "十": 10,
+        "百": 100,
+    }
+
+    if text.isdigit():
+        return int(text)
+
+    if text == "十":
+        return 10
+
+    if "十" in text:
+        parts = text.split("十")
+
+        if parts[0] == "":
+            tens = 10
+        else:
+            tens = chinese_numbers[parts[0]] * 10
+
+        if len(parts) == 1 or parts[1] == "":
+            ones = 0
+        else:
+            ones = chinese_numbers[parts[1]]
+
+        return tens + ones
+
+    if text in chinese_numbers:
+        return chinese_numbers[text]
+
+    return None
+
+
 def extract_chapter_outline(outline, chapter_number):
-    """从阶段大纲中提取指定章节；识别失败时返回完整大纲。"""
+    """从阶段大纲中提取指定章节；支持阿拉伯数字和中文数字章节号。"""
 
     pattern = re.compile(
-        r"^\s*(?:#{1,6}\s*)?第\s*(\d+)\s*章.*$",
+        r"^\s*(?:#{1,6}\s*)?第\s*([0-9零一二三四五六七八九十百]+)\s*章.*$",
         re.MULTILINE,
     )
 
     matches = list(pattern.finditer(outline))
 
     for index, match in enumerate(matches):
-        if int(match.group(1)) == chapter_number:
+        chapter_text = match.group(1)
+        detected_number = chinese_number_to_int(chapter_text)
+
+        if detected_number == chapter_number:
             start = match.start()
 
             if index + 1 < len(matches):

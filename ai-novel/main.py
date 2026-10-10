@@ -91,7 +91,6 @@ def load_previous_summaries(novel_name, completed_chapter):
     return "\n\n".join(summaries)
 
 
-
 def chinese_number_to_int(text):
     """把中文数字章节号转换成整数。"""
 
@@ -348,8 +347,9 @@ def create_new_novel():
     print("第一章保存完成。")
   
 
+
 def continue_novel():
-    """续写下一章，并在每 10 章完成时处理阶段任务。"""
+    """从当前进度开始，续写指定数量的章节。"""
 
     novel_name = input("请输入小说名称：").strip()
 
@@ -363,6 +363,19 @@ def continue_novel():
         print("没有找到这本小说，请检查名称是否正确。")
         return
 
+    # 询问本次需要续写多少章。
+    try:
+        chapter_count = int(
+            input("请输入本次需要续写的章节数：").strip()
+        )
+    except ValueError:
+        print("请输入有效的正整数。")
+        return
+
+    if chapter_count <= 0:
+        print("续写章节数必须大于 0。")
+        return
+
     print("\n正在读取小说资料...")
 
     setting = load_setting(novel_name)
@@ -373,34 +386,81 @@ def continue_novel():
         print("这本小说还没有章节，请检查小说文件。")
         return
 
-    # 如果上次在完成整十章节后中断，先补做阶段任务。
-    if latest % BATCH_SIZE == 0:
-        finalize_completed_batch(
+    print(f"\n当前最新章节：第 {latest} 章")
+    print(f"本次计划续写 {chapter_count} 章。")
+    print(f"预计生成第 {latest + 1} 章至第 {latest + chapter_count} 章。")
+
+    # 逐章生成，每完成一章就保存。
+    for _ in range(chapter_count):
+
+        # 每次循环都重新读取最新章节编号。
+        latest = get_latest_chapter(novel_name)
+
+        if latest == 0:
+            print("没有找到有效的章节，已停止续写。")
+            return
+
+        # 如果上次在完成整十章节后中断，先补做阶段任务。
+        if latest % BATCH_SIZE == 0:
+            finalize_completed_batch(
+                novel_name,
+                setting,
+                latest,
+            )
+
+        next_chapter = latest + 1
+
+        # 例如第 11 章使用第 11–20 章的大纲。
+        stage_start = (
+            (next_chapter - 1) // BATCH_SIZE
+        ) * BATCH_SIZE + 1
+
+        stage_end = stage_start + BATCH_SIZE - 1
+
+        current_outline_path = outline_path(
             novel_name,
-            setting,
-            latest,
+            stage_start,
+            stage_end,
         )
 
-    next_chapter = latest + 1
+        # 如果当前阶段大纲不存在，生成并保存。
+        if not os.path.exists(current_outline_path):
+            print(
+                f"\n缺少第 {stage_start}–{stage_end} 章的大纲，"
+                "正在生成..."
+            )
 
-    # 例如第 11 章使用第 11–20 章的大纲。
-    stage_start = (
-        (next_chapter - 1) // BATCH_SIZE
-    ) * BATCH_SIZE + 1
+            previous_summaries = load_previous_summaries(
+                novel_name,
+                stage_start - 1,
+            )
 
-    stage_end = stage_start + BATCH_SIZE - 1
+            if stage_start == 1:
+                outline = generate_outline(setting)
+            else:
+                outline = generate_next_outline(
+                    setting,
+                    previous_summaries,
+                    stage_start,
+                    stage_end,
+                )
 
-    current_outline_path = outline_path(
-        novel_name,
-        stage_start,
-        stage_end,
-    )
+            save_outline(
+                novel_name,
+                stage_start,
+                stage_end,
+                outline,
+            )
 
-    # 如果当前阶段大纲不存在，尝试根据此前总结生成。
-    if not os.path.exists(current_outline_path):
-        print(
-            f"\n缺少第 {stage_start}–{stage_end} 章的大纲，"
-            "正在生成..."
+        outline = load_outline(
+            novel_name,
+            stage_start,
+            stage_end,
+        )
+
+        previous_chapter = load_chapter(
+            novel_name,
+            latest,
         )
 
         previous_summaries = load_previous_summaries(
@@ -408,76 +468,53 @@ def continue_novel():
             stage_start - 1,
         )
 
-        if stage_start == 1:
-            outline = generate_outline(setting)
-        else:
-            outline = generate_next_outline(
-                setting,
-                previous_summaries,
-                stage_start,
-                stage_end,
-            )
-
-        save_outline(
-            novel_name,
-            stage_start,
-            stage_end,
+        chapter_outline = extract_chapter_outline(
             outline,
+            next_chapter,
         )
 
-    outline = load_outline(
-        novel_name,
-        stage_start,
-        stage_end,
-    )
+        print(
+            f"\n===== 正在生成第 {next_chapter} 章 "
+            f"（本次进度：{_ + 1}/{chapter_count}）====="
+        )
 
-    previous_chapter = load_chapter(
-        novel_name,
-        latest,
-    )
+        chapter = generate_chapter(
+            setting,
+            chapter_outline,
+            next_chapter,
+            previous_chapter,
+            previous_summaries,
+        )
 
-    previous_summaries = load_previous_summaries(
-        novel_name,
-        stage_start - 1,
-    )
+        if not chapter or not chapter.strip():
+            print(
+                f"第 {next_chapter} 章生成结果为空，"
+                "已停止批量续写。"
+            )
+            print("已保存的章节会保留，可以之后重新续写。")
+            return
 
-    chapter_outline = extract_chapter_outline(
-        outline,
-        next_chapter,
-    )
+        save_chapter(
+            novel_name,
+            next_chapter,
+            chapter,
+        )
 
-    print(
-        f"\n当前最新章节：第 {latest} 章"
-    )
+        print(f"第 {next_chapter} 章保存完成。")
 
-    print(
-        f"正在生成第 {next_chapter} 章..."
-    )
+        # 第 10、20、30……章完成后处理阶段任务。
+        if next_chapter % BATCH_SIZE == 0:
+            finalize_completed_batch(
+                novel_name,
+                setting,
+                next_chapter,
+            )
 
-    chapter = generate_chapter(
-        setting,
-        chapter_outline,
-        next_chapter,
-        previous_chapter,
-        previous_summaries,
-    )
+    final_latest = get_latest_chapter(novel_name)
 
-    save_chapter(
-        novel_name,
-        next_chapter,
-        chapter,
-    )
-
-    print(
-        f"第 {next_chapter} 章保存完成。"
-    )
-
-    # 第 10、20、30……章完成后自动总结并规划下一阶段。
-    finalize_completed_batch(
-        novel_name,
-        setting,
-        next_chapter,
-    )
+    print("\n批量续写完成！")
+    print(f"当前最新章节：第 {final_latest} 章")
+    print(f"本次计划续写：{chapter_count} 章")
 
 
 def main():
